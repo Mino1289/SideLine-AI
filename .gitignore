@@ -1,5 +1,12 @@
+video/hockey/out/*
+
 **/__pycache__/**
 *.pyc
 *.pyo
 
 .DS_Store
+
+# Ignore virtual environment directories
+venv/
+env/
+.venv/

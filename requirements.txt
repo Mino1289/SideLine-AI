@@ -1,0 +1,6 @@
+ultralytics
+supervision
+easyocr
+opencv-python
+scikit-learn
+tqdm

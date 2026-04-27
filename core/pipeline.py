@@ -123,7 +123,24 @@ class HockeyVideoPipeline:
 
     def _generate_labels(self, detections) -> list:
         valid_ocrs = self.ocr_tracker.get_validated(detections.tracker_id)
-        return [f"#{val}" if val else f"ID:{tid}" for tid, val in zip(detections.tracker_id, valid_ocrs)]
+        labels = []
+        for tid, val, cid in zip(detections.tracker_id, valid_ocrs, detections.class_id):
+            if val:
+                # Try to find the name in any team's roster
+                found_names = []
+                for team_name, roster in config.TEAM_ROSTERS.items():
+                    if val in roster:
+                        found_names.append(roster[val])
+                
+                if found_names:
+                    name = "/".join(found_names) if len(set(found_names)) > 1 else found_names[0]
+                    labels.append(f"#{val} {name}")
+                else:
+                    # Number not in rosters (bad OCR)
+                    labels.append(f"ID:{tid}")
+            else:
+                labels.append(f"ID:{tid}")
+        return labels
 
     def _update_homography(self, kp_detections: sv.Detections, width: int):
         mask_kp = np.isin([self.detector.kp_model.names[cid] for cid in kp_detections.class_id], config.TARGET_LANDMARKS)

@@ -9,6 +9,7 @@ import config
 from vision.detector import HockeyDetector
 from vision.identifier import OCRIdentifier, OCRHistoryTracker
 from vision.mapper import ViewTransformer, map_generic_to_specific_points
+from vision.team_classifier import cluster_teams
 from utils.annotator import draw_hockey_rink_2d, draw_points_on_rink
 
 logger = logging.getLogger(__name__)
@@ -58,6 +59,7 @@ class HockeyVideoPipeline:
         
         box_annotator = sv.BoxAnnotator(thickness=2)
         label_annotator = sv.LabelAnnotator(text_scale=0.6, color=sv.Color.BLACK)
+        mask_annotator = sv.MaskAnnotator()
         
         transformer = None
         last_puck = sv.Detections.empty()
@@ -68,25 +70,37 @@ class HockeyVideoPipeline:
                 det_players = self.detector.detect_players(frame)
                 det_players = self.tracker_players.update_with_detections(det_players)
                 
-                # 2. OCR (1 frame / 5)
-                if i % 5 == 0 and len(det_players) > 0:
-                    self._update_ocr(det_players, frame)
+                # 1.5 Classification d'équipes
+                if len(det_players) > 0:
+                    crops = []
+                    masks = []
+                    for i, xyxy in enumerate(det_players.xyxy):
+                        x1, y1, x2, y2 = map(int, xyxy)
+                        crops.append(frame[max(0, y1):y2, max(0, x1):x2])
+                        if det_players.mask is not None:
+                            masks.append(det_players.mask[i, max(0, y1):y2, max(0, x1):x2])
+                    
+                    team_labels = cluster_teams(crops, masks if len(masks) == len(crops) else None)
+                    det_players.class_id = team_labels.astype(int)
+                
+                # 2. OCR (
+                self._update_ocr(det_players, frame)
                 
                 labels = self._generate_labels(det_players)
 
-                # 3. Points clés et Puck (1 frame / 3)
-                if i % 3 == 0:
-                    kp_all, det_puck = self.detector.detect_keypoints_and_puck(frame)
-                    try:
-                        last_puck = self.tracker_puck.update_with_detections(det_puck)
-                    except Exception: pass
-                    
-                    new_transformer = self._update_homography(kp_all, video_info.width)
-                    if new_transformer is not None:
-                        transformer = new_transformer
+                # 3. Points clés et Puck 
+                kp_all, det_puck = self.detector.detect_keypoints_and_puck(frame)
+                try:
+                    last_puck = self.tracker_puck.update_with_detections(det_puck)
+                except Exception: pass
+                
+                new_transformer = self._update_homography(kp_all, video_info.width)
+                if new_transformer is not None:
+                    transformer = new_transformer
                 
                 # 4. Rendu Visuel
-                annotated_frame = box_annotator.annotate(scene=frame.copy(), detections=det_players)
+                annotated_frame = mask_annotator.annotate(scene=frame.copy(), detections=det_players)
+                annotated_frame = box_annotator.annotate(scene=annotated_frame, detections=det_players)
                 annotated_frame = label_annotator.annotate(scene=annotated_frame, detections=det_players, labels=labels)
                 
                 # Overlay 2D

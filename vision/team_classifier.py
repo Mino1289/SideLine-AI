@@ -27,6 +27,9 @@ def cluster_teams(crops: List[np.ndarray], masks: Optional[List[np.ndarray]] = N
     if not features:
         return np.array([])
         
+    if len(features) < n_clusters:
+        return np.zeros(len(features), dtype=int)
+        
     kmeans = KMeans(n_clusters=n_clusters, random_state=42)
     labels = kmeans.fit_predict(features)
     return labels

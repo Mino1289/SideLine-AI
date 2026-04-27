@@ -5,7 +5,7 @@ class ViewTransformer:
     """Calcul d'homographie et projection 2D sur la patinoire."""
     
     def __init__(self, source: np.ndarray, target: np.ndarray):
-        self.m, _ = cv2.findHomography(source.astype(np.float32), target.astype(np.float32))
+        self.m, _ = cv2.findHomography(source.astype(np.float32), target.astype(np.float32), method=cv2.RANSAC, ransacReprojThreshold=5.0)
 
     def transform_points(self, points: np.ndarray) -> np.ndarray:
         if self.m is None or len(points) == 0:
